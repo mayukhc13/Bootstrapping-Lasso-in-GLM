@@ -1,0 +1,16 @@
+Attribute Information :
+
+Link : https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Coimbra
+
+Load the excel file named dataR2.xlsx attached in this folder first while reproduce the codes.
+
+The number of observation n is 116. 
+The response variable is binary. In original data set by 1, denote "healthy control(or absence) and by 2, denote "patients(or presence of cancer)".
+For ease of notations, we adjusted 1 and 2 respectively by 0 and 1 in the simulation.
+
+The 9 predictive factors are : {Age, BMI, Glucose, Insulin, HOMA, Leptin, Adiponectin, Resistin, MCP.1}
+
+We applied our proposed method to get important factors that involve in detection of Breast Cancer.
+Here we obtain Lasso estimate of all these 9 factors and 90% Bootstrap Percentile Intervals (Both,Right,Left Sided).
+Finally based on these intervals and lasso estimates, we capture the important factors weighing to the presence of Breast Cancer.
+This coincides with the findings of Patricio et al.(2018).
