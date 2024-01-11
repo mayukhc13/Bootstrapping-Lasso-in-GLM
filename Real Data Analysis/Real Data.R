@@ -5,7 +5,7 @@
 ## By 2, denote "patients(or presence of cancer)".
 ## For ease of notations we adjusted 1 and 2 respectively by 0 and 1 in the simulation. 
 ## There are p=9 predictor variables as in the data set.
-## Here we obtain Lasso estimate of all these 9 factors and 90% Bootstrap Percentile Intervals(Both,Right,Left Sided)
+## Here we obtain Lasso estimate of all these 9 factors and 90% Simultaneous Bootstrap Percentile Intervals
 ### Finally based on these intervals and lasso estimates, we capture the important factors weighing to the presence of Breast Cancer
 ## This coincides with the findings of Patricio et al.(2018)
 
@@ -13,6 +13,7 @@
 
 
 n=116
+p=9
 #load the data
 library(datasets)
 data(dataR2)
@@ -74,7 +75,10 @@ dataf_matrix = as.matrix(dataf)
 dataf_matrix
 response_y = dataf_matrix[,colnames(dataf_matrix)=="y"]
 response_y
-design_matrix = dataf_matrix[,colnames(dataf_matrix)!="y"]
+design_matrix1 = dataf_matrix[,colnames(dataf_matrix)!="y"]
+design_matrix1
+
+design_matrix=scale(design_matrix1,TRUE,TRUE)
 design_matrix
 
 
@@ -134,24 +138,36 @@ for(c in 1:B)
   library(CVXR)
   v = CVXR::Variable(9) ##declaration: bootstrap estimate wrt which objective fn is optimized
   
-  penalty_boot = lambda_opt*(p_norm(v,1)) ## penalty term in the objective fn
-  zz= t(response_y*G_boot) ## a col vector consisting of component wise product of y and G_boot
-  l1= -sum(zz*(design_matrix%*%v)) ## * does component wise product and return a vector, %*% returns actually a dot product
+  penalty_boot = (p_norm(v,1))*lambda_opt ## penalty term in the objective fn
+  zz= t(G_boot*response_y) ## a col vector consisting of component wise product of y and G_boot
+  l1= -sum((design_matrix%*%v)*zz) ## * does component wise product and return a vector, %*% returns actually a dot product
   zz1= as.matrix(response_y-P_tilde) ## col vector y-Ptilde
-  l2= sum(zz1*(design_matrix%*%v))
+  l2= sum((design_matrix%*%v)*zz1)
   zz2= t(G_boot) ## col vector G_boot
-  l3 = sum(zz2*(logistic(design_matrix%*%v))) ## logistic(z) is an atom for log(1+exp z) in cvxr and sum() does the component wise sum of that vector
+  l3 = sum((logistic(design_matrix%*%v))*zz2) ## logistic(z) is an atom for log(1+exp z) in cvxr and sum() does the component wise sum of that vector
   obj_boot = penalty_boot+l1+l2+l3  ## objective function
   prob_boot = Problem(Minimize(obj_boot)) ## minimisation of obj fn
   resultB = solve(prob_boot)
   resultB
   
   
-  final_boot = resultB$getValue(v)
-  final_boot1 = as.matrix(final_boot)
-  final_boot2 = t(final_boot1)
+  final_boot=  as.function(resultB$getValue , list("v"))
+  final_boot1 = final_boot(v)
+  #final_boot1 = final_boot1[!is.nan(final_boot1)]
+ final_boot1= as.vector(final_boot1)
+  if(any(is.na(final_boot1))==TRUE)
+  {
+    c=c-1
+    next
+    
+  }
+ 
+  final_boot1
+  final_boot2=as.matrix(final_boot1)
   final_boot2
-  beta_bootstrap[c,]= final_boot2 ## bootstrap estimator of lasso at each stage
+  final_boot3 = t(final_boot2)
+  final_boot3 
+  beta_bootstrap[c,]= final_boot3 ## bootstrap estimator of lasso at each stage
 }
 beta_bootstrap
 
@@ -170,48 +186,52 @@ sorted_tau_boot = apply(tau_boot,2,sort)
 sorted_tau_boot ## independent col wise sorting of tau boot for getting critical value
 
 alpha = 0.10 #level of significance
-lower_index = as.integer(B*(alpha/2)) #both sided
-index_right = as.integer(B*alpha) #right sided
-index_left = 1+ as.integer(B*(1-alpha)) #left sided
-upper_index = 1+ as.integer(B*(1-(alpha/2))) #both sided
-lower_index
-upper_index
-index_left
-index_right
+simul_lower_index= 1+as.integer(B*(alpha/(2*p))) ##simultaneous lower index
+simul_upper_index= 1+ as.integer(B*(1-(alpha/(2*p))))
+simul_index_left= 1+as.integer(B*(1-(alpha/p)))
+simul_index_right= as.integer(B*(alpha/p)) 
 
-critical_value_matrix = matrix(NA,2,9)
+simul_lower_index
+simul_upper_index
+simul_index_left
+simul_index_right
+
+
+simul_critical_value_matrix = matrix(NA,2,9)
 for(j in 1:9)
 {
-  critical_value_matrix[1,j]= -(sorted_tau_boot[upper_index,j])/sqrt(n)
-  critical_value_matrix[2,j]= -(sorted_tau_boot[lower_index,j])/sqrt(n)
+  simul_critical_value_matrix[1,j]= -(sorted_tau_boot[simul_upper_index,j])/sqrt(n)
+  simul_critical_value_matrix[2,j]= -(sorted_tau_boot[simul_lower_index,j])/sqrt(n)
 }
-critical_value_matrix
+simul_critical_value_matrix
 
-critical_value_matrix_right = matrix(NA,1,9)
-right_confidence_limit_matrix = matrix(NA,1,9)
-for(j in 1:9){
-  critical_value_matrix_right[1,j] = -(sorted_tau_boot[index_right,j])/sqrt(n)
-  right_confidence_limit_matrix[1,j]= beta_hat_final3[j]+critical_value_matrix_right[1,j]
-}
-critical_value_matrix_right
-right_confidence_limit_matrix
-
-critical_value_matrix_left = matrix(NA,1,9)
-left_confidence_limit_matrix = matrix(NA,1,9)
-for(j in 1:9){
-  critical_value_matrix_left[1,j] = -(sorted_tau_boot[index_left,j])/sqrt(n)
-  left_confidence_limit_matrix[1,j]= beta_hat_final3[j]+critical_value_matrix_left[1,j]
-}
-critical_value_matrix_left
-left_confidence_limit_matrix
-
-lower_confidence_limit_matrix = matrix(NA,1,9)
-upper_confidence_limit_matrix = matrix(NA,1,9)
+simul_lower_confidence_limit_matrix = matrix(NA,1,9)
+simul_upper_confidence_limit_matrix = matrix(NA,1,9)
 for(j in 1:9)
 {
-  lower_confidence_limit_matrix[1,j]= beta_hat_final3[j]+critical_value_matrix[1,j]
-  upper_confidence_limit_matrix[1,j]= beta_hat_final3[j]+critical_value_matrix[2,j]
+  simul_lower_confidence_limit_matrix[1,j]= beta_hat_final3[j]+simul_critical_value_matrix[1,j]
+  simul_upper_confidence_limit_matrix[1,j]= beta_hat_final3[j]+simul_critical_value_matrix[2,j]
 }
-lower_confidence_limit_matrix
-upper_confidence_limit_matrix
+simul_lower_confidence_limit_matrix
+simul_upper_confidence_limit_matrix
+
+simul_critical_value_matrix_right = matrix(NA,1,9)
+simul_right_confidence_limit_matrix = matrix(NA,1,9)
+for(j in 1:9){
+  simul_critical_value_matrix_right[1,j] = -(sorted_tau_boot[simul_index_right,j])/sqrt(n)
+  simul_right_confidence_limit_matrix[1,j]= beta_hat_final3[j]+simul_critical_value_matrix_right[1,j]
+}
+simul_critical_value_matrix_right
+simul_right_confidence_limit_matrix
+
+simul_critical_value_matrix_left = matrix(NA,1,9)
+simul_left_confidence_limit_matrix = matrix(NA,1,9)
+for(j in 1:9){
+  simul_critical_value_matrix_left[1,j] = -(sorted_tau_boot[simul_index_left,j])/sqrt(n)
+  simul_left_confidence_limit_matrix[1,j]= beta_hat_final3[j]+simul_critical_value_matrix_left[1,j]
+}
+simul_critical_value_matrix_left
+simul_left_confidence_limit_matrix
+
+
 
